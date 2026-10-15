@@ -1,15 +1,14 @@
 /**
  * Where the app finds its updates. No Electron here: the tests load this file under Node.
  *
- * The app's releases live in the plugin's repository beside the CLI's, tagged desktop--vX.Y.Z and never marked latest:
- * install.sh, install.ps1 and `keepplain update` take the CLI from the repository's latest release. So the app does not
- * ask GitHub for "the latest release" (electron-updater's GitHub provider does, and would get the CLI's): it lists the
- * releases, takes the newest desktop--v one that has its update file (latest.yml on Windows, latest-mac.yml on macOS: a
- * release still uploading has none yet), and hands electron-updater that release's download folder as a generic feed.
+ * The app's releases live in its own repository, tagged desktop--vX.Y.Z; the CLI's stay in the plugin's. The app does not
+ * ask GitHub for "the latest release" (electron-updater's GitHub provider does): it lists the releases, takes the newest
+ * desktop--v one that has its update file (latest.yml on Windows, latest-mac.yml on macOS: a release still uploading has
+ * none yet), and hands electron-updater that release's download folder as a generic feed.
  */
 import { newer } from './cli.mjs';
 
-export const REPOSITORY = 'keepplain/keepplain-plugin';
+export const REPOSITORY = 'keepplain/keepplain-desktop';
 export const TAG_PREFIX = 'desktop--v';
 
 /** The GitHub API list of releases, and the folder a release's files download from (env overrides, for the tests). */

@@ -38,6 +38,6 @@ if (!kits.length) {
     process.exit(1);
 }
 
-// Built again every time: a file left in ../dist from an earlier commit would go to the Store.
-run(process.execPath, [join(HERE, 'scripts', 'stage-cli.mjs'), '--rebuild']);
+// Staged again every time: a file left in resources/bin from an earlier build would go to the Store.
+run(process.execPath, [join(HERE, 'scripts', 'stage-cli.mjs')]);
 run('npx', ['electron-builder', '--win', 'appx', '--publish', 'never'], { ELECTRON_BUILDER_WINDOWS_KITS_PATH: join(bin, kits.at(-1), 'x64'), CSC_IDENTITY_AUTO_DISCOVERY: 'false' });

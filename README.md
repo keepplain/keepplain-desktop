@@ -1,6 +1,6 @@
 # KeepPlain app
 
-A window over the `keepplain` CLI for macOS and Windows: connect the agents, see what is connected and what was sent,
+A window over the `keepplain` CLI ([keepplain/keepplain-plugin](https://github.com/keepplain/keepplain-plugin)) for macOS and Windows: connect the agents, see what is connected and what was sent,
 send a session after a confirmation screen, change the settings. Every screen reads a command's `--json` output, and
 every change is one command, so the app does nothing the CLI cannot do and keeps nothing of its own but its window's
 size.
@@ -29,8 +29,9 @@ keeps its icons only.
 
 ## The CLI inside
 
-The app carries the single `keepplain` file of the same commit (`resources/bin`, staged by `scripts/stage-cli.mjs`).
-At start it puts it in `~/.keepplain/bin`, where `install.sh` and `install.ps1` do, when that file is missing or older,
+The app carries the single `keepplain` file of the plugin's release that `package.json` names (`keepplainCli`):
+`scripts/stage-cli.mjs` downloads it from that release, checks it against the release's `SHA256SUMS` and puts it in
+`resources/bin`. At start the app puts it in `~/.keepplain/bin`, where `install.sh` and `install.ps1` do, when that file is missing or older,
 and runs that one. The agents' hooks call the file by its path, so they keep working without the app. A newer file there
 (`keepplain update`) is kept. An app opened from the Dock gets launchd's short PATH: `src/main/cli.mjs` asks the
 login shell for its PATH, so `claude`, `codex` and `pi` are found. A session whose folder is gone (a removed worktree) is
@@ -44,13 +45,14 @@ command the main process asks Chromium which proxy the site goes through (`sessi
 ## Develop
 
 ```bash
-cd desktop
 npm install
 npm run stage-cli
 npm start
 ```
 
-`npm run stage-cli` builds the CLI for this computer with Bun (`../scripts/build.mjs`) when `../dist` has none. To try the
+`npm run stage-cli` downloads the CLI for this computer (kept in `resources/cli` while it matches the release's
+`SHA256SUMS`). `KEEPPLAIN_CLI_FILE=<path> npm run stage-cli` stages a file of your own instead, such as one that
+`npm run build` made in a checkout of the plugin (`dist/keepplain-<platform>-<arch>`), to try a CLI not released yet. To try the
 app beside your real setup, point it somewhere else: `KEEPPLAIN_HOME`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
 `CURSOR_CONFIG_DIR`, `PI_CODING_AGENT_DIR`, `KEEPPLAIN_URL` and `KEEPPLAIN_APP_DATA` (the app's own settings folder)
 all pass through. `KEEPPLAIN_APP_CLI=<path>` runs that keepplain instead of installing one.
@@ -93,7 +95,7 @@ workflow builds the same as the `store-msix` artifact, kept out of the GitHub re
 
 The installed app updates itself (`src/main/updater.mjs`, electron-updater). At start (after 15 s) and every six hours it
 lists the repository's releases, takes the newest `desktop--vX.Y.Z` one that has `latest.yml` (`src/main/updates.mjs`:
-never GitHub's "latest release", which is the CLI's), and downloads the installer from that release in the background,
+not GitHub's "latest release", since one still uploading has no `latest.yml` yet), and downloads the installer from that release in the background,
 only the changed blocks when the `.blockmap` of the installed version is there too. The sidebar then says "Update ready:
 restart"; the installer also goes in by itself when the app quits. Settings shows the state and has "Check for updates".
 The new version brings its own keepplain, which replaces the one in `~/.keepplain/bin` unless that one is newer.
@@ -106,9 +108,9 @@ keeps a copy of itself in `%LOCALAPPDATA%\keepplain-desktop-updater` as the base
 
 ## Release
 
-Tag `desktop--vX.Y.Z` (matching `package.json`): `.github/workflows/desktop.yml` builds the `.dmg` (Apple silicon and
-Intel) and the Windows `.exe` with the CLI of that commit inside, and publishes them as a release that is never marked
-latest (the CLI's installers and `keepplain update` use the latest release). Without signing secrets the macOS app is
+Tag `desktop--vX.Y.Z` (matching `package.json`): `.github/workflows/release.yml` builds the `.dmg` (Apple silicon and
+Intel) and the Windows `.exe` with the `keepplainCli` release inside, and publishes them as a release here. To ship a
+newer CLI, raise `keepplainCli` to a released version (a `keepplain--vX.Y.Z` release of the plugin) first. Without signing secrets the macOS app is
 signed ad hoc and the Windows installer is unsigned; the workflow says which secrets sign and notarize them.
 
-The CLI now also reads Windows manual Internet Settings when run without the app (including agent hooks), if no proxy environment variable is set. The app still resolves PAC/WPAD with Chromium; standalone CLI supports manual settings only. See the plugin README for precedence and bypass rules.
+The CLI now also reads Windows manual Internet Settings when run without the app (including agent hooks), if no proxy environment variable is set. The app still resolves PAC/WPAD with Chromium; standalone CLI supports manual settings only. See the [plugin README](https://github.com/keepplain/keepplain-plugin#readme) for precedence and bypass rules.

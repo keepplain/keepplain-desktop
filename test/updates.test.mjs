@@ -30,9 +30,9 @@ test('an update is a newer version only', () => {
 });
 
 test('the feed is the release\'s download folder; the tests point both addresses elsewhere', () => {
-    assert.equal(feedUrl('desktop--v0.2.0', {}), 'https://github.com/keepplain/keepplain-plugin/releases/download/desktop--v0.2.0');
+    assert.equal(feedUrl('desktop--v0.2.0', {}), 'https://github.com/keepplain/keepplain-desktop/releases/download/desktop--v0.2.0');
     assert.equal(feedUrl('desktop--v0.2.0', { KEEPPLAIN_APP_DOWNLOADS_URL: 'http://127.0.0.1:9/dl/' }), 'http://127.0.0.1:9/dl/desktop--v0.2.0');
-    assert.equal(releasesUrl({}), 'https://api.github.com/repos/keepplain/keepplain-plugin/releases?per_page=50');
+    assert.equal(releasesUrl({}), 'https://api.github.com/repos/keepplain/keepplain-desktop/releases?per_page=50');
     assert.equal(channelFile('win32'), 'latest.yml');
     assert.equal(channelFile('darwin'), 'latest-mac.yml');
 });

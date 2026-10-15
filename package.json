@@ -9,6 +9,7 @@
     "license": "MIT",
     "type": "module",
     "main": "main.mjs",
+    "keepplainCli": "0.17.2",
     "scripts": {
         "start": "electron .",
         "stage-cli": "node scripts/stage-cli.mjs",
@@ -75,7 +76,7 @@
             {
                 "provider": "github",
                 "owner": "keepplain",
-                "repo": "keepplain-plugin",
+                "repo": "keepplain-desktop",
                 "releaseType": "release"
             }
         ],

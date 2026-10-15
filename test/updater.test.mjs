@@ -53,7 +53,7 @@ test('the newest app release is downloaded from its own release folder, and then
     const { updater, asked, states, autoUpdater } = deps({ releases: [release('keepplain--v1.0.0'), release('desktop--v0.2.0')] });
     const state = await updater.check();
     assert.equal(asked.length, 1);
-    assert.deepEqual(autoUpdater.feeds, [{ provider: 'generic', url: 'https://github.com/keepplain/keepplain-plugin/releases/download/desktop--v0.2.0' }]);
+    assert.deepEqual(autoUpdater.feeds, [{ provider: 'generic', url: 'https://github.com/keepplain/keepplain-desktop/releases/download/desktop--v0.2.0' }]);
     assert.deepEqual(states, ['checking', 'downloading', 'downloading', 'ready']);
     assert.deepEqual(state, { state: 'ready', version: '0.2.0' });
     assert.equal(updater.install(), true);
