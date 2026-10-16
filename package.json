@@ -9,7 +9,7 @@
     "license": "MIT",
     "type": "module",
     "main": "main.mjs",
-    "keepplainCli": "0.17.2",
+    "keepplainCli": "0.17.3",
     "scripts": {
         "start": "electron .",
         "stage-cli": "node scripts/stage-cli.mjs",
