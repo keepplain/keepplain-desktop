@@ -10,6 +10,7 @@ const AGENTS = {
     codex: { name: 'Codex', mark: 'cx' },
     cursor: { name: 'Cursor', mark: 'cu' },
     pi: { name: 'Pi', mark: 'pi' },
+    antigravity: { name: 'Antigravity', mark: 'ag' },
 };
 const SEND_MODES = [
     { mode: 'off', title: 'Ask me each time', text: 'Nothing leaves until you pick a session and press Send.', tag: 'Recommended' },
@@ -295,7 +296,7 @@ async function getStarted() {
     const agents = (state.status?.agents ?? []).filter((a) => a.present).map((a) => a.id);
     if (!agents.length) {
         w.phase = 'idle';
-        w.error = 'No coding agent was found on this computer. Install Claude Code, Codex, Cursor or Pi, then try again.';
+        w.error = 'No coding agent was found on this computer. Install Claude Code, Codex, Cursor, Pi or Antigravity, then try again.';
         return render();
     }
     // Signed in now: whether this account may still import (once per account) is known.
@@ -699,7 +700,7 @@ function viewSessions() {
     else if (s.loading && !s.list) body = `<div class="list">${'<div class="skeleton"></div>'.repeat(5)}</div>`;
     else if (!list.length) {
         body = `<div class="list"><div class="empty">${icon(s.query ? 'search' : 'inbox')}<div><strong>${s.query ? 'No sessions match' : 'No sessions yet'}</strong></div>
-            <div class="small">${s.query ? 'Try other words.' : s.folder ? 'No Claude Code, Codex, Cursor or Pi sessions in this folder.' : 'Sessions from the last 30 days show up here once you work with a connected agent.'}</div></div></div>`;
+            <div class="small">${s.query ? 'Try other words.' : s.folder ? 'No Claude Code, Codex, Cursor, Pi or Antigravity sessions in this folder.' : 'Sessions from the last 30 days show up here once you work with a connected agent.'}</div></div></div>`;
     } else {
         body = groups.map((g) => `<p class="eyebrow group">${esc(g.day)}</p><div class="list">${g.items.map(sessionRow).join('')}</div>`).join('');
     }

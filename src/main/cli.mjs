@@ -17,7 +17,7 @@ import { delimiter, dirname, join } from 'node:path';
 export const CLI_NAME = process.platform === 'win32' ? 'keepplain.exe' : 'keepplain';
 
 /** What the agents put in the environment of the commands they run: inherited by the app, they would make it pass for one. */
-const AGENT_VARIABLES = ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'PI_SESSION_FILE', 'CURSOR_AGENT', 'CURSOR_TRACE_ID', 'CURSOR_TRANSCRIPT_PATH', 'ELECTRON_RUN_AS_NODE'];
+const AGENT_VARIABLES = ['CLAUDECODE', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'PI_SESSION_FILE', 'CURSOR_AGENT', 'CURSOR_TRACE_ID', 'CURSOR_TRANSCRIPT_PATH', 'ANTIGRAVITY_CONVERSATION_ID', 'ELECTRON_RUN_AS_NODE'];
 
 export const ctHome = (env = process.env) => env.KEEPPLAIN_HOME || join(homedir(), '.keepplain');
 export const installedCli = (env = process.env) => join(ctHome(env), 'bin', CLI_NAME);
@@ -99,7 +99,7 @@ export function ensureCli({ bundled, env = process.env }) {
 
 /**
  * PATH as the person's shell has it. An app opened from the Dock or Finder gets launchd's short PATH, without the folders
- * claude, codex and pi are installed in, so keepplain would find none of them. Windows apps get the user's PATH.
+ * claude, codex, pi and agy are installed in, so keepplain would find none of them. Windows apps get the user's PATH.
  */
 export function shellPath(env = process.env, platform = process.platform) {
     if (platform === 'win32') return env.Path ?? env.PATH ?? '';

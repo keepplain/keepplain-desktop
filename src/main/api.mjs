@@ -7,7 +7,7 @@
  * for a session this app previewed (the confirmation screen shows that preview), within the half hour keepplain keeps
  * a preview, and only once.
  */
-export const AGENTS = ['claude-code', 'codex', 'cursor', 'pi'];
+export const AGENTS = ['claude-code', 'codex', 'cursor', 'pi', 'antigravity'];
 const SESSION_ID = /^[A-Za-z0-9-]{8,100}$/;
 const TEAM = /^[a-z0-9-]{1,40}$/;
 const AUTO = ['off', 'on', 'team'];

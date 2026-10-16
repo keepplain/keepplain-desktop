@@ -88,6 +88,7 @@ test('every row of the screens is one keepplain command', async () => {
     assert.equal((await api.pastShare({ team: '--site=x', sessions: [] })).ok, false);
     assert.equal((await api.pastShare({ team: 'acme', sessions: ['--yes'] })).ok, false);
     await api.setAgent({ agent: 'cursor', on: true });
+    await api.setAgent({ agent: 'antigravity', on: true });
     await api.setAgent({ agent: 'codex', on: false });
     await api.sessions({ folder: '/work/shop' });
     await api.sessions({});
@@ -107,6 +108,7 @@ test('every row of the screens is one keepplain command', async () => {
             'import-past teams',
             'import-past share --team=acme --stdin',
             'enable --yes --agent=cursor',
+            'enable --yes --agent=antigravity',
             'disable --yes --agent=codex',
             'sessions --limit=60',
             'sessions --all --limit=60',
