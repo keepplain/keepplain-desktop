@@ -131,6 +131,12 @@ ipcMain.handle('ct', async (event, { method, params, token } = {}) => {
         if (r.canceled || !r.filePaths[0]) return null;
         return { folder: r.filePaths[0] };
     }
+    if (method === 'chooseFile') {
+        const folder = typeof params?.folder === 'string' && params.folder ? { defaultPath: params.folder } : {};
+        const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), { title: 'A file of a git repository', properties: ['openFile'], ...folder });
+        if (r.canceled || !r.filePaths[0]) return null;
+        return { file: r.filePaths[0] };
+    }
     if (method === 'open') return openLink(params?.url);
     if (method === 'updateState') return updater.state();
     if (method === 'checkUpdates') return updater.check();

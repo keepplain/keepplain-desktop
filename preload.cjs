@@ -1,7 +1,7 @@
 // The window's only way out: window.ct.call(method, params, onEvent) asks the app (main.mjs), which checks it. onEvent
 // gets the steps of a long command (sign-in, connecting agents, sending) as they happen. onUpdate hears of the app's own
 // updates (src/main/updater.mjs).
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const listeners = new Map();
 let next = 0;
@@ -18,5 +18,13 @@ contextBridge.exposeInMainWorld('ct', {
     },
     onUpdate(cb) {
         updateListeners.add(cb);
+    },
+    /** Where a file dropped on the window is (the Blame screen): the page itself is not told. */
+    pathOf(file) {
+        try {
+            return webUtils.getPathForFile(file) || null;
+        } catch {
+            return null;
+        }
     },
 });

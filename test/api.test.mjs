@@ -138,3 +138,25 @@ test('disconnect keeps the sign-in when an agent could not be disconnected', asy
     assert.match(r.error, /still signed in/);
     assert.deepEqual(calls, ['disable --yes']);
 });
+
+test('blame takes a file of this computer by its whole path, and lines only as numbers', async () => {
+    const { api, calls } = stand();
+    await api.blame({ file: 'C:\\work\\shop\\src\\webhook.ts' });
+    await api.blame({ file: '/home/olga/shop/webhook.ts', from: 10, to: 40 });
+    assert.deepEqual(calls.map((c) => [c.args.join(' '), c.cwd]), [
+        ['blame C:\\work\\shop\\src\\webhook.ts', 'C:\\work\\shop\\src\\'],
+        ['blame /home/olga/shop/webhook.ts -L 10,40', '/home/olga/shop/'],
+    ]);
+
+    for (const bad of [
+        { file: 'src/webhook.ts' },
+        { file: '--site=https://evil.example' },
+        { file: 42 },
+        { file: '/x.ts', from: 5 },
+        { file: '/x.ts', from: 9, to: 3 },
+        { file: '/x.ts', from: '1,9 --rev=x', to: 9 },
+    ]) {
+        assert.equal((await api.blame(bad)).ok, false, JSON.stringify(bad));
+    }
+    assert.equal(calls.length, 2);
+});

@@ -11,6 +11,8 @@ export const AGENTS = ['claude-code', 'codex', 'cursor', 'pi', 'antigravity'];
 const SESSION_ID = /^[A-Za-z0-9-]{8,100}$/;
 const TEAM = /^[a-z0-9-]{1,40}$/;
 const AUTO = ['off', 'on', 'team'];
+/** A path from the root: C:\…, \\server\…, or /…. */
+const ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\[^\\]|\/)/;
 /** As long as keepplain keeps a preview (lib/prepared.mjs, PREPARED_TTL_MS). */
 export const PREVIEW_TTL_MS = 30 * 60_000;
 
@@ -127,6 +129,17 @@ export function createApi({ run, now = Date.now }) {
             }
 
             return { ok: true, result: { results: results.map((r) => r.result) }, events: [], error: null, details: null };
+        },
+        /**
+         * git blame of a file the person picked or dropped here, with the session behind each line; from..to blames those
+         * lines only. keepplain runs git in the file's folder: the code stays on this computer, the commits go to the site.
+         */
+        blame({ file, from = null, to = null } = {}) {
+            if (typeof file !== 'string' || file.length > 1000 || !ABSOLUTE.test(file)) return refuse('That is not a file on this computer.');
+            const lines = from === null && to === null ? null : [from, to];
+            if (lines && !(lines.every((n) => Number.isInteger(n) && n > 0 && n <= 1_000_000) && from <= to)) return refuse('Those are not lines of the file.');
+
+            return run(['blame', file, ...(lines ? ['-L', lines.join(',')] : [])], { cwd: file.slice(0, Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\')) + 1), timeoutMs: 120_000 });
         },
         setRules: ({ on } = {}) => run(['rules', on ? 'on' : 'off']),
         setNudge: ({ on } = {}) => run(['nudge', on ? 'on' : 'off']),

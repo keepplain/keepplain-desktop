@@ -1,8 +1,9 @@
-// The window: a welcome wizard, then Home, Sessions (with the confirmation before each send) and Settings, over the
-// keepplain CLI. Everything it shows comes from a command's JSON (window.ct.call, preload.cjs); everything it changes
-// is one command. Text from sessions is the person's own, so all of it is escaped.
+// The window: a welcome wizard, then Home, Sessions (with the confirmation before each send), Blame and Settings, over
+// the keepplain CLI. Everything it shows comes from a command's JSON (window.ct.call, preload.cjs); everything it
+// changes is one command. Text from sessions is the person's own, so all of it is escaped.
+import { codeHtml, panelHtml, sessionsHtml, summaryHtml } from './blame.js';
 
-const call = (method, params = {}, onEvent = null) => window.ct.call(method, params, onEvent);
+const call =(method, params = {}, onEvent = null) => window.ct.call(method, params, onEvent);
 
 // The site's agent glyphs (resources/js/lib/format.ts, agentGlyph).
 const AGENTS = {
@@ -38,6 +39,8 @@ const ICONS = {
     out: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/>',
     back: '<path d="M19 12H5M12 19l-7-7 7-7"/>',
     inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/>',
+    blame: '<path d="M4 3v18"/><path d="M8 6h12M8 12h8M8 18h11"/>',
+    file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
 };
 /**
  * The logo, as the site's BrandMark.vue draws it (its paths are the site's resources/js/lib/brand.ts): the cursor in
@@ -70,6 +73,8 @@ const state = {
     agentOp: null,
     sessions: { list: null, loading: false, error: null, query: '', agent: 'all', folder: null },
     confirm: null,
+    /** The Blame screen: the file, `keepplain blame --json` of it, git's or KeepPlain's gutter, the commit opened. */
+    blame: { file: null, data: null, loading: false, error: null, mode: 'sessions', open: null, recent: [], cache: null },
     settings: { busy: null, input: '' },
     toasts: [],
     /** The app's own update (src/main/updater.mjs); asked: the person pressed "Check for updates" and expects an answer. */
@@ -984,6 +989,73 @@ async function disconnect() {
     }
 }
 
+/* ---------- Blame ---------- */
+
+/** git blame of $file with the session behind each line (keepplain blame); the last few files stay in the list. */
+async function openBlame(file) {
+    const b = state.blame;
+    Object.assign(b, { file, loading: true, error: null, open: null, ...(b.file !== file ? { data: null, cache: null } : {}) });
+    b.recent = [file, ...b.recent.filter((f) => f !== file)].slice(0, 6);
+    state.view = 'blame';
+    render();
+    const r = await call('blame', { file });
+    if (state.blame.file !== file) return;
+    b.loading = false;
+    b.data = r.ok ? r.result : b.data;
+    b.cache = null;
+    b.error = r.ok ? null : /Unknown command "blame"/.test(r.error ?? '') ? 'This needs a newer KeepPlain command line. Restart the app after it updates, or run keepplain update.' : friendly(r.error);
+    render();
+    if (r.ok) document.querySelector('.main')?.scrollTo(0, 0);
+}
+
+async function chooseBlameFile() {
+    const folder = state.blame.file?.slice(0, Math.max(state.blame.file.lastIndexOf('/'), state.blame.file.lastIndexOf('\\'))) || state.sessions.folder;
+    const r = await call('chooseFile', { folder });
+    if (r?.file) openBlame(r.file);
+}
+
+/** The code with its gutter, built again only when the file, the mode or the opened commit changes. */
+function blameCode() {
+    const b = state.blame;
+    const key = `${b.mode}|${b.open}`;
+    if (b.cache?.key !== key) b.cache = { key, html: codeHtml(b.data, { mode: b.mode, open: b.open }) };
+
+    return b.cache.html;
+}
+
+function viewBlame() {
+    const b = state.blame;
+    const d = b.data;
+    const name = d ? d.file.split('/').at(-1) : null;
+    const actions = b.file
+        ? `<button class="btn ghost icon" title="Blame again" data-action="blame-reload" ${b.loading ? 'disabled' : ''}>${b.loading ? '<span class="spinner"></span>' : icon('refresh', 'sm')}</button>
+            <button class="btn" data-action="blame-choose">${icon('file', 'sm')}Another file…</button>`
+        : '';
+    const head = `<div class="page-head row"><div class="grow"><h1>${esc(name ?? 'Blame')}</h1>
+        <p class="sub">${d ? `<span class="mono">${esc(d.file)}</span>${d.rev !== 'HEAD' ? ` at ${esc(d.rev)}` : ''} · ${plural(d.lines.length, 'line')}` : 'Pick a file of a git repository: each line shows the agent session that wrote it. The code stays on this computer; only its commits are looked up.'}</p></div>${actions}</div>`;
+
+    let body;
+    if (!b.file) {
+        body = `<div class="card bl-pick">${icon('blame')}<div><strong>Which file?</strong></div><p class="small muted">Choose one, or drop it on this window.</p>
+            <button class="btn primary" data-action="blame-choose">${icon('file', 'sm')}Choose a file…</button></div>`;
+    } else if (b.loading && !d) body = `<div class="list">${'<div class="skeleton"></div>'.repeat(4)}</div>`;
+    else if (!d) body = alertHtml('bad', b.error);
+    else {
+        const note = d.status === 'signed_out' ? alertHtml('warn', 'Sign in from Home to see the sessions behind these lines. Sessions on this computer are shown already.')
+            : d.status === 'unreachable' ? alertHtml('warn', `The sessions were not looked up: ${friendly(d.message)}`) : '';
+        body = `${b.error ? alertHtml('bad', b.error) : ''}${note}
+            <div class="toolbar">${summaryHtml(d)}
+                <div class="pills">${[['git', 'git blame'], ['sessions', 'KeepPlain']].map(([m, label]) => `<button class="${b.mode === m ? 'on' : ''}" data-action="blame-mode" data-mode="${m}">${label}</button>`).join('')}</div></div>
+            <div class="bl-layout${b.open ? ' with-panel' : ''}">${d.lines.length ? blameCode() : '<div class="empty">An empty file.</div>'}${b.open ? panelHtml(b.open, d) : ''}</div>
+            ${sessionsHtml(d)}`;
+    }
+    const recent = b.recent.filter((f) => f !== b.file);
+
+    return `<div class="page wide">${head}${body}
+        ${recent.length ? `<p class="eyebrow group">Recent files</p><div class="list">${recent.map((f) => `<button class="session bl-recent" data-action="blame-recent" data-file="${esc(f)}">${icon('file', 'sm')}<span class="grow mono">${esc(f)}</span></button>`).join('')}</div>` : ''}
+    </div>`;
+}
+
 /* ---------- frame ---------- */
 
 /** The sidebar's word about an update: while it downloads, and the button to restart once it is ready. */
@@ -999,6 +1071,7 @@ function sidebar() {
     const tabs = [
         ['home', 'Home', 'home'],
         ['sessions', 'Sessions', 'list'],
+        ['blame', 'Blame', 'blame'],
         ['settings', 'Settings', 'gear'],
     ];
     const active = state.view === 'confirm' ? 'sessions' : state.view;
@@ -1023,13 +1096,15 @@ function render() {
     const caret = active ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
     const scroll = root.querySelector('.main')?.scrollTop ?? 0;
     const listScroll = root.querySelector('.share-list')?.scrollTop ?? 0;
-    const views = { home: viewHome, sessions: viewSessions, confirm: viewConfirm, settings: viewSettings };
+    const views = { home: viewHome, sessions: viewSessions, confirm: viewConfirm, blame: viewBlame, settings: viewSettings };
     const toasts = `<div class="toasts" role="status">${state.toasts.map((t) => `<div class="toast ${t.kind}">${icon(t.kind === 'bad' ? 'alert' : 'check', 'sm')}${esc(t.text)}</div>`).join('')}</div>`;
     root.innerHTML = state.view === 'welcome' ? viewWelcome() + toasts : `<div class="shell">${sidebar()}<main class="main">${views[state.view]()}</main></div>${toasts}`;
     const main = root.querySelector('.main');
     if (main) main.scrollTop = scroll;
     const list = root.querySelector('.share-list');
     if (list) list.scrollTop = listScroll;
+    // A part's share of a bar: the page may set no style of its own (the CSP), the script may.
+    for (const el of root.querySelectorAll('[data-grow]')) el.style.flexGrow = el.dataset.grow;
     if (active) {
         const el = document.getElementById(active);
         if (el && !el.disabled) {
@@ -1081,6 +1156,30 @@ document.addEventListener('click', async (event) => {
     else if (action === 'share-team') answerTeam(true);
     else if (action === 'retry-teams') offerTeams();
     else if (action === 'keep-private') answerTeam(false);
+    else if (action === 'blame-choose') chooseBlameFile();
+    else if (action === 'blame-reload' && state.blame.file) openBlame(state.blame.file);
+    else if (action === 'blame-recent') openBlame(el.dataset.file);
+    else if (action === 'blame-mode') {
+        state.blame.mode = el.dataset.mode === 'git' ? 'git' : 'sessions';
+        render();
+    } else if (action === 'blame-open') {
+        state.blame.open = state.blame.open === el.dataset.sha ? null : el.dataset.sha;
+        render();
+    } else if (action === 'blame-close') {
+        state.blame.open = null;
+        render();
+    }
+});
+
+// A file dropped on the Blame screen: its blame. Elsewhere a drop does nothing (the window never navigates).
+document.addEventListener('dragover', (event) => {
+    if (state.view === 'blame') event.preventDefault();
+});
+document.addEventListener('drop', (event) => {
+    event.preventDefault();
+    const file = state.view === 'blame' ? event.dataTransfer?.files?.[0] : null;
+    const path = file ? window.ct.pathOf?.(file) : null;
+    if (path) openBlame(path);
 });
 
 document.addEventListener('change', (event) => {
@@ -1125,6 +1224,10 @@ document.addEventListener('keydown', (event) => {
             saveWords(state.status.privacy.words.slice(0, -1));
         }
         return;
+    }
+    if (state.view === 'blame' && event.key === 'Escape' && state.blame.open) {
+        state.blame.open = null;
+        render();
     }
     if (state.view === 'confirm') {
         if (event.key === 'Escape' && !state.confirm?.sending) leaveConfirm('sessions');
