@@ -1,7 +1,8 @@
-// The window: a welcome wizard, then Home, Sessions (with the confirmation before each send), Blame and Settings, over
+// The window: a welcome wizard, then Home, Sessions (with the confirmation before each send), Blame, Plan limits and Settings, over
 // the keepplain CLI. Everything it shows comes from a command's JSON (window.ct.call, preload.cjs); everything it
 // changes is one command. Text from sessions is the person's own, so all of it is escaped.
 import { codeHtml, panelHtml, sessionsHtml, summaryHtml } from './blame.js';
+import { nowHtml, PLANS, shareHtml, windowHtml } from './limits.js';
 
 const call =(method, params = {}, onEvent = null) => window.ct.call(method, params, onEvent);
 
@@ -41,6 +42,7 @@ const ICONS = {
     inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z"/>',
     blame: '<path d="M4 3v18"/><path d="M8 6h12M8 12h8M8 18h11"/>',
     file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
+    gauge: '<path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/>',
 };
 /**
  * The logo, as the site's BrandMark.vue draws it (its paths are the site's resources/js/lib/brand.ts): the cursor in
@@ -75,6 +77,8 @@ const state = {
     confirm: null,
     /** The Blame screen: the file, `keepplain blame --json` of it, git's or KeepPlain's gutter, the commit opened. */
     blame: { file: null, data: null, loading: false, error: null, mode: 'sessions', open: null, recent: [], cache: null },
+    /** The Plan limits screen: `keepplain limits status --json`, then `limits fit --json` (it reads the transcripts). */
+    limits: { status: null, fit: null, loading: false, fitting: false, error: null, busy: false },
     settings: { busy: null, input: '' },
     toasts: [],
     /** The app's own update (src/main/updater.mjs); asked: the person pressed "Check for updates" and expects an answer. */
@@ -989,6 +993,84 @@ async function disconnect() {
     }
 }
 
+/* ---------- Plan limits ---------- */
+
+const NEWER_CLI = 'This needs a newer KeepPlain command line. Restart the app after it updates, or run keepplain update.';
+const limitsError = (r) => (/Unknown command "limits"|keepplain limits install \| status|share \[on/.test(r.error ?? '') ? NEWER_CLI : friendly(r.error));
+
+/** What has been recorded, then the fit of it: the fit reads every transcript since the first sample, so it comes second. */
+async function loadLimits() {
+    const l = state.limits;
+    Object.assign(l, { loading: true, error: null });
+    render();
+    const r = await call('limitsStatus');
+    l.loading = false;
+    l.status = r.ok ? r.result : l.status;
+    l.error = r.ok ? null : limitsError(r);
+    render();
+    if (!r.ok || !r.result?.installed || !r.result.samples) return;
+    l.fitting = true;
+    render();
+    const f = await call('limitsFit');
+    l.fitting = false;
+    l.fit = f.ok ? f.result : l.fit;
+    if (!f.ok) l.error = limitsError(f);
+    render();
+}
+
+async function installLimits() {
+    const l = state.limits;
+    l.busy = true;
+    render();
+    const r = await call('limitsInstall');
+    l.busy = false;
+    if (!r.ok) toast(limitsError(r), 'bad');
+    else toast('Recording. Numbers show after a few days of work in Claude Code.');
+    loadLimits();
+}
+
+async function shareLimits(on) {
+    const l = state.limits;
+    l.busy = true;
+    render();
+    const r = await call('limitsShare', { on });
+    l.busy = false;
+    // A command line from before `limits share` prints its usage line and no JSON: that is no answer.
+    if (!r.ok || !r.result) toast(r.ok ? NEWER_CLI : limitsError(r), 'bad');
+    else toast(on ? 'Sent. From now on once a day.' : 'Sending off. What was sent stays on your page until you delete it.');
+    const s = await call('limitsStatus');
+    if (s.ok) l.status = s.result;
+    render();
+}
+
+function viewLimits() {
+    const l = state.limits;
+    const st = l.status;
+    const busy = l.loading || l.fitting;
+    const head = `<div class="page-head row"><div class="grow"><h1>Plan limits</h1><p class="muted m0">What a percent of your Claude plan is worth, measured on this computer.</p></div>
+        ${st?.installed ? `<button class="btn ghost icon" title="Measure again" data-action="limits-reload" ${busy ? 'disabled' : ''}>${busy ? '<span class="spinner"></span>' : icon('refresh', 'sm')}</button>` : ''}</div>`;
+    if (l.error && !st) return head + alertHtml('bad', l.error);
+    if (!st) return head + '<div class="empty"><span class="spinner"></span></div>';
+    if (!st.installed) {
+        return `${head}<div class="card"><h2>Measure your plan</h2>
+            <p class="small muted">Anthropic publishes no token counts for Pro, Max or Ultra. After every answer Claude Code knows how much of the five-hour and the weekly window is used; KeepPlain keeps that next to the tokens of the same minutes, on this computer, and works out what one percent is worth.</p>
+            <p class="small muted">It records in the Claude app through the KeepPlain plugin, and in the terminal through Claude Code's status line (yours keeps showing what it showed). Nothing leaves this computer unless you turn on sending.</p>
+            <button class="btn primary" data-action="limits-install" ${l.busy ? 'disabled' : ''}>${icon('gauge', 'sm')}Start recording</button></div>`;
+    }
+    const since = st.first ? new Date(st.first).toLocaleDateString([], { month: 'short', day: 'numeric' }) : null;
+    let body = `${l.error ? alertHtml('bad', l.error) : ''}<div class="card"><div class="row"><div class="grow"><h2 class="m0">${esc(PLANS[st.plan] ?? 'Plan unknown')}</h2>
+        <p class="small muted m0">${st.samples ? `${plural(st.samples, 'sample')} since ${esc(since)}` : 'No samples yet: use Claude Code for a while.'}</p></div></div>${nowHtml(st)}</div>`;
+    if (l.fitting && !l.fit) body += '<div class="card row"><span class="spinner"></span><span class="small muted">Reading your Claude Code transcripts…</span></div>';
+    else if (l.fit) {
+        body += windowHtml('Weekly window', l.fit.seven_day) + windowHtml('Five-hour window', l.fit.five_hour);
+        if (l.fit.fiveHourWindowsPerWeek) body += `<p class="small muted">A week holds about <strong>${l.fit.fiveHourWindowsPerWeek.toFixed(1)}</strong> five-hour windows of the same work.</p>`;
+    }
+    body += shareHtml(st, { site: state.status?.site ?? 'https://keepplain.com', signedIn: Boolean(state.status?.signed_in), busy: l.busy });
+    body += '<p class="small faint">List prices are the yardstick, not what the plan costs. Use of this account elsewhere (claude.ai, another computer) is left out as noise.</p>';
+
+    return head + body;
+}
+
 /* ---------- Blame ---------- */
 
 /** git blame of $file with the session behind each line (keepplain blame); the last few files stay in the list. */
@@ -1072,6 +1154,7 @@ function sidebar() {
         ['home', 'Home', 'home'],
         ['sessions', 'Sessions', 'list'],
         ['blame', 'Blame', 'blame'],
+        ['limits', 'Plan limits', 'gauge'],
         ['settings', 'Settings', 'gear'],
     ];
     const active = state.view === 'confirm' ? 'sessions' : state.view;
@@ -1096,7 +1179,7 @@ function render() {
     const caret = active ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
     const scroll = root.querySelector('.main')?.scrollTop ?? 0;
     const listScroll = root.querySelector('.share-list')?.scrollTop ?? 0;
-    const views = { home: viewHome, sessions: viewSessions, confirm: viewConfirm, blame: viewBlame, settings: viewSettings };
+    const views = { home: viewHome, sessions: viewSessions, confirm: viewConfirm, blame: viewBlame, limits: viewLimits, settings: viewSettings };
     const toasts = `<div class="toasts" role="status">${state.toasts.map((t) => `<div class="toast ${t.kind}">${icon(t.kind === 'bad' ? 'alert' : 'check', 'sm')}${esc(t.text)}</div>`).join('')}</div>`;
     root.innerHTML = state.view === 'welcome' ? viewWelcome() + toasts : `<div class="shell">${sidebar()}<main class="main">${views[state.view]()}</main></div>${toasts}`;
     const main = root.querySelector('.main');
@@ -1122,6 +1205,7 @@ function go(view) {
     render();
     document.querySelector('.main')?.scrollTo(0, 0);
     if (view === 'sessions' && !state.sessions.list) loadSessions();
+    if (view === 'limits' && !state.limits.loading) loadLimits();
     if (view === 'home' && state.status?.signed_in && !state.account) checkAccount();
 }
 
@@ -1156,6 +1240,8 @@ document.addEventListener('click', async (event) => {
     else if (action === 'share-team') answerTeam(true);
     else if (action === 'retry-teams') offerTeams();
     else if (action === 'keep-private') answerTeam(false);
+    else if (action === 'limits-install') installLimits();
+    else if (action === 'limits-reload') loadLimits();
     else if (action === 'blame-choose') chooseBlameFile();
     else if (action === 'blame-reload' && state.blame.file) openBlame(state.blame.file);
     else if (action === 'blame-recent') openBlame(el.dataset.file);
@@ -1186,6 +1272,7 @@ document.addEventListener('change', (event) => {
     const el = event.target;
     const { action } = el.dataset ?? {};
     if (action === 'toggle-agent') toggleAgent(el.dataset.agent, el.checked);
+    else if (action === 'limits-share') shareLimits(el.checked);
     else if (action === 'past-tick') {
         state.wizard.past.on = el.checked;
         state.wizard.past.touched = true;

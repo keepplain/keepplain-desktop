@@ -141,6 +141,11 @@ export function createApi({ run, now = Date.now }) {
 
             return run(['blame', file, ...(lines ? ['-L', lines.join(',')] : [])], { cwd: file.slice(0, Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\')) + 1), timeoutMs: 120_000 });
         },
+        /** keepplain limits: what has been recorded, the fit of it (reads the transcripts), recording on, sending on or off. */
+        limitsStatus: () => run(['limits', 'status']),
+        limitsFit: () => run(['limits', 'fit'], { timeoutMs: 180_000 }),
+        limitsInstall: () => run(['limits', 'install']),
+        limitsShare: ({ on } = {}) => run(['limits', 'share', on ? 'on' : 'off'], { timeoutMs: 180_000 }),
         setRules: ({ on } = {}) => run(['rules', on ? 'on' : 'off']),
         setNudge: ({ on } = {}) => run(['nudge', on ? 'on' : 'off']),
         setWords({ words } = {}) {
