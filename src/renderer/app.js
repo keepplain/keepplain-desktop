@@ -2,7 +2,7 @@
 // the keepplain CLI. Everything it shows comes from a command's JSON (window.ct.call, preload.cjs); everything it
 // changes is one command. Text from sessions is the person's own, so all of it is escaped.
 import { codeHtml, panelHtml, sessionsHtml, summaryHtml } from './blame.js';
-import { nowHtml, PLANS, shareHtml, windowHtml } from './limits.js';
+import { AGENT_NAMES, nowHtml, planName, shareHtml, windowHtml } from './limits.js';
 
 const call =(method, params = {}, onEvent = null) => window.ct.call(method, params, onEvent);
 
@@ -78,7 +78,7 @@ const state = {
     /** The Blame screen: the file, `keepplain blame --json` of it, git's or KeepPlain's gutter, the commit opened. */
     blame: { file: null, data: null, loading: false, error: null, mode: 'sessions', open: null, recent: [], cache: null },
     /** The Plan limits screen: `keepplain limits status --json`, then `limits fit --json` (it reads the transcripts). */
-    limits: { status: null, fit: null, loading: false, fitting: false, error: null, busy: false },
+    limits: { agent: 'claude', status: null, fit: null, loading: false, fitting: false, error: null, busy: false },
     settings: { busy: null, input: '' },
     toasts: [],
     /** The app's own update (src/main/updater.mjs); asked: the person pressed "Check for updates" and expects an answer. */
@@ -1001,9 +1001,12 @@ const limitsError = (r) => (/Unknown command "limits"|keepplain limits install \
 /** What has been recorded, then the fit of it: the fit reads every transcript since the first sample, so it comes second. */
 async function loadLimits() {
     const l = state.limits;
+    const { agent } = l;
     Object.assign(l, { loading: true, error: null });
     render();
-    const r = await call('limitsStatus');
+    const r = await call('limitsStatus', { agent });
+    // The other agent was picked meanwhile: its own load shows.
+    if (l.agent !== agent) return;
     l.loading = false;
     l.status = r.ok ? r.result : l.status;
     l.error = r.ok ? null : limitsError(r);
@@ -1011,7 +1014,8 @@ async function loadLimits() {
     if (!r.ok || !r.result?.installed || !r.result.samples) return;
     l.fitting = true;
     render();
-    const f = await call('limitsFit');
+    const f = await call('limitsFit', { agent });
+    if (l.agent !== agent) return;
     l.fitting = false;
     l.fit = f.ok ? f.result : l.fit;
     if (!f.ok) l.error = limitsError(f);
@@ -1038,17 +1042,27 @@ async function shareLimits(on) {
     // A command line from before `limits share` prints its usage line and no JSON: that is no answer.
     if (!r.ok || !r.result) toast(r.ok ? NEWER_CLI : limitsError(r), 'bad');
     else toast(on ? 'Sent. From now on once a day.' : 'Sending off. What was sent stays on your page until you delete it.');
-    const s = await call('limitsStatus');
+    const s = await call('limitsStatus', { agent: l.agent });
     if (s.ok) l.status = s.result;
     render();
+}
+
+/** Claude Code or Codex: each has its own plan, numbers and prices. */
+function pickLimitsAgent(agent) {
+    const l = state.limits;
+    if (!AGENT_NAMES[agent] || l.agent === agent) return;
+    Object.assign(l, { agent, status: null, fit: null, fitting: false, loading: false, error: null });
+    loadLimits();
 }
 
 function viewLimits() {
     const l = state.limits;
     const st = l.status;
     const busy = l.loading || l.fitting;
-    const head = `<div class="page-head row"><div class="grow"><h1>Plan limits</h1><p class="muted m0">What a percent of your Claude plan is worth, measured on this computer.</p></div>
-        ${st?.installed ? `<button class="btn ghost icon" title="Measure again" data-action="limits-reload" ${busy ? 'disabled' : ''}>${busy ? '<span class="spinner"></span>' : icon('refresh', 'sm')}</button>` : ''}</div>`;
+    const codex = l.agent === 'codex';
+    const pills = `<div class="pills">${Object.entries(AGENT_NAMES).map(([a, name]) => `<button class="${l.agent === a ? 'on' : ''}" data-action="limits-agent" data-agent="${a}">${name}</button>`).join('')}</div>`;
+    const head = `<div class="page-head row"><div class="grow"><h1>Plan limits</h1><p class="muted m0">What a percent of your ${codex ? 'ChatGPT plan in Codex' : 'Claude plan'} is worth, measured on this computer.</p></div>
+        ${pills}${st?.installed ? `<button class="btn ghost icon" title="Measure again" data-action="limits-reload" ${busy ? 'disabled' : ''}>${busy ? '<span class="spinner"></span>' : icon('refresh', 'sm')}</button>` : ''}</div>`;
     if (l.error && !st) return head + alertHtml('bad', l.error);
     if (!st) return head + '<div class="empty"><span class="spinner"></span></div>';
     if (!st.installed) {
@@ -1058,15 +1072,19 @@ function viewLimits() {
             <button class="btn primary" data-action="limits-install" ${l.busy ? 'disabled' : ''}>${icon('gauge', 'sm')}Start recording</button></div>`;
     }
     const since = st.first ? new Date(st.first).toLocaleDateString([], { month: 'short', day: 'numeric' }) : null;
-    let body = `${l.error ? alertHtml('bad', l.error) : ''}<div class="card"><div class="row"><div class="grow"><h2 class="m0">${esc(PLANS[st.plan] ?? 'Plan unknown')}</h2>
-        <p class="small muted m0">${st.samples ? `${plural(st.samples, 'sample')} since ${esc(since)}` : 'No samples yet: use Claude Code for a while.'}</p></div></div>${nowHtml(st)}</div>`;
-    if (l.fitting && !l.fit) body += '<div class="card row"><span class="spinner"></span><span class="small muted">Reading your Claude Code transcripts…</span></div>';
+    const none = codex ? 'No Codex session of the last four weeks on this computer has its limits yet: work in Codex for a while.' : 'No samples yet: use Claude Code for a while.';
+    let body = `${l.error ? alertHtml('bad', l.error) : ''}<div class="card"><div class="row"><div class="grow"><h2 class="m0">${esc(planName(l.agent, st.plan))}</h2>
+        <p class="small muted m0">${st.samples ? `${plural(st.samples, 'sample')} since ${esc(since)}${codex ? ', from your Codex sessions' : ''}` : none}</p></div></div>${nowHtml(st)}</div>`;
+    if (l.fitting && !l.fit) body += `<div class="card row"><span class="spinner"></span><span class="small muted">Reading your ${codex ? 'Codex sessions' : 'Claude Code transcripts'}…</span></div>`;
     else if (l.fit) {
-        body += windowHtml('Weekly window', l.fit.seven_day) + windowHtml('Five-hour window', l.fit.five_hour);
+        body += windowHtml('Weekly window', l.fit.seven_day, l.agent) + windowHtml('Five-hour window', l.fit.five_hour, l.agent);
         if (l.fit.fiveHourWindowsPerWeek) body += `<p class="small muted">A week holds about <strong>${l.fit.fiveHourWindowsPerWeek.toFixed(1)}</strong> five-hour windows of the same work.</p>`;
+        // Answers of models without a list price count for nothing: say which, so a cheap-looking percent is explained.
+        const unpriced = Object.entries(l.fit.unpriced ?? {});
+        if (unpriced.length) body += `<p class="small muted">No list price for ${unpriced.map(([m, n]) => `${esc(m)} (${plural(n, 'answer')})`).join(', ')}: their tokens count for nothing here.</p>`;
     }
     body += shareHtml(st, { site: state.status?.site ?? 'https://keepplain.com', signedIn: Boolean(state.status?.signed_in), busy: l.busy });
-    body += '<p class="small faint">List prices are the yardstick, not what the plan costs. Use of this account elsewhere (claude.ai, another computer) is left out as noise.</p>';
+    body += `<p class="small faint">${codex ? 'OpenAI API list prices are the yardstick, not what the plan costs. Use of this account elsewhere (ChatGPT, Codex cloud, another computer) is left out as noise.' : 'Claude API list prices are the yardstick, not what the plan costs. Use of this account elsewhere (claude.ai, another computer) is left out as noise.'}</p>`;
 
     return head + body;
 }
@@ -1242,6 +1260,7 @@ document.addEventListener('click', async (event) => {
     else if (action === 'keep-private') answerTeam(false);
     else if (action === 'limits-install') installLimits();
     else if (action === 'limits-reload') loadLimits();
+    else if (action === 'limits-agent') pickLimitsAgent(el.dataset.agent);
     else if (action === 'blame-choose') chooseBlameFile();
     else if (action === 'blame-reload' && state.blame.file) openBlame(state.blame.file);
     else if (action === 'blame-recent') openBlame(el.dataset.file);

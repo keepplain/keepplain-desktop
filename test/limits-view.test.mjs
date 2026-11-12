@@ -1,7 +1,7 @@
 // The Plan limits screen (src/renderer/limits.js), from what `keepplain limits status --json` and `limits fit --json` give.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { money, nowHtml, resetsIn, shareHtml, tokens, windowHtml } from '../src/renderer/limits.js';
+import { money, nowHtml, planName, resetsIn, shareHtml, tokens, windowHtml } from '../src/renderer/limits.js';
 
 const NOW = Date.parse('2026-11-08T12:00:00Z');
 
@@ -79,4 +79,22 @@ test('sharing: the switch, its state and the two pages; off without a sign-in', 
     assert.match(out, /data-action="limits-share"  disabled/);
     const failed = shareHtml({ share: { on: true, error: '<b>offline</b>' } }, { site: 'https://keepplain.com', signedIn: true, busy: false });
     assert.match(failed, /&lt;b&gt;offline/);
+});
+
+test('Codex: its plans, its model families and its name where a window is missing', () => {
+    assert.equal(planName('codex', 'plus'), 'Plus');
+    assert.equal(planName('codex', 'self_serve_business_prolite'), 'self serve business prolite');
+    assert.equal(planName('claude', 'max_20x'), 'Max 20x');
+    assert.equal(planName('claude', null), 'Plan unknown');
+    assert.match(windowHtml('Five-hour window', { enough: false, absent: true }, 'codex'), /None: Codex got no such window/);
+    const html = windowHtml('Weekly window', { ...fitted, families: { error: 0.05, weights: { sol: { relative: 1, low: 0.9, high: 1.1, share: 0.6, thin: false }, terra: { relative: 0.5, low: 0.4, high: 0.6, share: 0.4, thin: false } } } }, 'codex');
+    assert.match(html, /Sol<\/span>/);
+    assert.match(html, /Terra<\/span>/);
+});
+
+test('a window says how many stale samples were left out, and takes a fall without a reset time as a reset', () => {
+    const html = windowHtml('Weekly window', { ...fitted, falls: 1, stale: 3 });
+    assert.match(html, /fell 1 time\(s\) where no reset time came with it/);
+    assert.match(html, /3 sample\(s\) lower than one before them were left out/);
+    assert.doesNotMatch(html, /may roll/);
 });

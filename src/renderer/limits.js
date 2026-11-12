@@ -4,9 +4,15 @@
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-export const PLANS = { pro: 'Pro', max_5x: 'Max 5x', max_20x: 'Max 20x', max: 'Max', ultra: 'Ultra', team: 'Team', enterprise: 'Enterprise' };
+export const AGENT_NAMES = { claude: 'Claude Code', codex: 'Codex' };
+/** Claude's plans as the plugin names them (limits/cli.mjs planFrom); ChatGPT's as Codex does (plan_type). */
+export const PLANS = {
+    claude: { pro: 'Pro', max_5x: 'Max 5x', max_20x: 'Max 20x', max: 'Max', ultra: 'Ultra', team: 'Team', enterprise: 'Enterprise' },
+    codex: { free: 'Free', go: 'Go', plus: 'Plus', prolite: 'Pro Lite', pro: 'Pro', promax: 'Pro Max', team: 'Team', business: 'Business', enterprise: 'Enterprise', edu: 'Edu' },
+};
+export const planName = (agent, plan) => PLANS[agent]?.[plan] ?? (plan ? plan.replace(/_/g, ' ') : 'Plan unknown');
 const KINDS = { input: 'Uncached input', write: 'Cache writes', read: 'Cache reads', output: 'Output' };
-const MODELS = { fable: 'Fable', opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' };
+const MODELS = { fable: 'Fable', opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku', astra: 'Astra', sol: 'Sol', terra: 'Terra', luna: 'Luna', 'gpt-5': 'GPT-5' };
 
 export const money = (v) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v >= 100 ? `$${Math.round(v).toLocaleString('en-US')}` : `$${v.toFixed(2)}`);
 export const tokens = (v) => (!v ? '—' : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : `${Math.round(v / 1e3)}K`);
@@ -50,10 +56,11 @@ function partHtml(title, part, names) {
 }
 
 /** One window's fit (fit.mjs analyze): what a percent is worth, how well it fits, and the weights. */
-export function windowHtml(title, w) {
-    if (w?.absent) return `<div class="card"><h2>${title}</h2><p class="small muted m0">None: Claude Code got no such window for this account, so your plan has none now.</p></div>`;
+export function windowHtml(title, w, agent = 'claude') {
+    const name = AGENT_NAMES[agent] ?? AGENT_NAMES.claude;
+    if (w?.absent) return `<div class="card"><h2>${title}</h2><p class="small muted m0">None: ${name} got no such window for this account, so your plan has none now.</p></div>`;
     if (!w?.enough) {
-        return `<div class="card"><h2>${title}</h2><p class="small muted m0">Not enough yet: ${esc(w?.intervals ?? 0)} step(s) of the size needed. It takes a few days of ordinary work in Claude Code.</p></div>`;
+        return `<div class="card"><h2>${title}</h2><p class="small muted m0">Not enough yet: ${esc(w?.intervals ?? 0)} step(s) of the size needed. It takes a few days of ordinary work in ${name}.</p></div>`;
     }
     const stat = (label, value, sub = '') => `<div><div class="small muted">${label}</div><div class="lm-big">${value}</div>${sub ? `<div class="small faint">${sub}</div>` : ''}</div>`;
 
@@ -67,7 +74,7 @@ export function windowHtml(title, w) {
         ${w.weightSteps && w.kept < w.weightSteps ? `<p class="small muted mt-s m0">Token kinds and models show from ${esc(w.weightSteps)} steps (${esc(w.kept)} so far): fewer fit noise.</p>` : ''}
         ${partHtml('Token kinds', w.kinds, KINDS)}
         ${partHtml('Models', w.families, MODELS)}
-        <p class="small faint m0 mt-s">Left out: ${esc(w.outside ?? 0)} with no work on this computer (use elsewhere), ${esc(w.outliers ?? 0)} far off.${w.falls ? ` The percent fell ${esc(w.falls)} time(s) without a reset: the window may roll rather than reset.` : ''}</p>
+        <p class="small faint m0 mt-s">Left out: ${esc(w.outside ?? 0)} with no work on this computer (use elsewhere), ${esc(w.outliers ?? 0)} far off.${w.falls ? ` The percent fell ${esc(w.falls)} time(s) where no reset time came with it: each is taken as a reset.` : ''}${w.stale ? ` ${esc(w.stale)} sample(s) lower than one before them were left out: another session's older answer.` : ''}</p>
     </div>`;
 }
 

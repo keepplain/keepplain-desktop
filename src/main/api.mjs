@@ -11,6 +11,8 @@ export const AGENTS = ['claude-code', 'codex', 'cursor', 'pi', 'antigravity'];
 const SESSION_ID = /^[A-Za-z0-9-]{8,100}$/;
 const TEAM = /^[a-z0-9-]{1,40}$/;
 const AUTO = ['off', 'on', 'team'];
+/** `keepplain limits` measures Claude Code by default and Codex with --agent=codex; anything else is Claude Code. */
+const limitsAgent = (agent) => (agent === 'codex' ? ['--agent=codex'] : []);
 /** A path from the root: C:\…, \\server\…, or /…. */
 const ABSOLUTE = /^(?:[A-Za-z]:[\\/]|\\\\[^\\]|\/)/;
 /** As long as keepplain keeps a preview (lib/prepared.mjs, PREPARED_TTL_MS). */
@@ -142,8 +144,8 @@ export function createApi({ run, now = Date.now }) {
             return run(['blame', file, ...(lines ? ['-L', lines.join(',')] : [])], { cwd: file.slice(0, Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\')) + 1), timeoutMs: 120_000 });
         },
         /** keepplain limits: what has been recorded, the fit of it (reads the transcripts), recording on, sending on or off. */
-        limitsStatus: () => run(['limits', 'status']),
-        limitsFit: () => run(['limits', 'fit'], { timeoutMs: 180_000 }),
+        limitsStatus: ({ agent } = {}) => run(['limits', 'status', ...limitsAgent(agent)]),
+        limitsFit: ({ agent } = {}) => run(['limits', 'fit', ...limitsAgent(agent)], { timeoutMs: 180_000 }),
         limitsInstall: () => run(['limits', 'install']),
         limitsShare: ({ on } = {}) => run(['limits', 'share', on ? 'on' : 'off'], { timeoutMs: 180_000 }),
         setRules: ({ on } = {}) => run(['rules', on ? 'on' : 'off']),
