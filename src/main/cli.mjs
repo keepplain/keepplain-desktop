@@ -125,6 +125,9 @@ export function cliEnv(env = process.env, path = shellPath(env)) {
         delete clean.Path;
         clean.Path = path;
         delete clean.PATH;
+        // Windows looks for a program named without a folder in the current one first, and keepplain runs in the
+        // person's repository, which may hold a git.exe of its own. This tells the system (and cmd.exe) not to.
+        clean.NoDefaultCurrentDirectoryInExePath = '1';
     }
     for (const name of AGENT_VARIABLES) delete clean[name];
 
