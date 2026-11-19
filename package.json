@@ -1,7 +1,7 @@
 {
     "name": "keepplain-desktop",
     "productName": "KeepPlain",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "private": true,
     "description": "KeepPlain",
     "author": "KeepPlain",
@@ -9,7 +9,7 @@
     "license": "MIT",
     "type": "module",
     "main": "main.mjs",
-    "keepplainCli": "0.18.7",
+    "keepplainCli": "0.18.12",
     "scripts": {
         "start": "electron .",
         "stage-cli": "node scripts/stage-cli.mjs",
